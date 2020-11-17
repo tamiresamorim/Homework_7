@@ -1,5 +1,4 @@
 # Homework_7
-HM\#7
 ================
 Tamires Amorim, Yamei Li, Meirou Guan and Carol-Ann Jackson
 11/14/2020
