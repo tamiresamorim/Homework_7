@@ -1,0 +1,317 @@
+---
+title: "HM#7"
+author: "Tamires Amorim, Yamei Li, Meirou Guan and Carol-Ann Jackson"
+date: "11/14/2020"
+output: github_document
+---
+
+``````{r Load NHIS, include=FALSE}
+library(knitr)
+load("~/R/NHIS_2014.RData")
+attach(data_use1)
+save.image("workspace.RData")
+```
+
+
+## Understanding different methods to classify data
+
+The following project wants to understand what factors make an adult more likely to have health insurance. The analysis of the interactions between the binary variable (not covered by insurance NOTCOV) as the dependent variable with different explanatory will be based in the models logit, random forest, support vector machines and elastic net methods.
+
+### 1. Subset the data: 
+We decided to focus our subgroup on people who work full time, who's ages range from 21 to 75 and who make a yearly wage earning of 10,000 to 75,000.
+```{r}
+data_use1$earn_lastyr <- as.factor(data_use1$ERNYR_P)
+levels(data_use1$earn_lastyr) <- c("0","$01-$4999","$5000-$9999","$10000-$14999","$15000-$19999","$20000-$24999","$25000-$34999","$35000-$44999","$45000-$54999","$55000-$64999","$65000-$74999","$75000 and over", "refused", "IS NA")
+dat2 <- subset(data_use1, ((AGE_P >= 21) & (AGE_P <= 75)))
+```
+
+### 2. Run the logit model, glm (linear regression with a dependent binary variable):
+Here we are looking into the insurance coverage as dependent variable, and age, gender, race, education, marital status and region as the explanatory variables for why people are not with insurance coverage. 
+```{r logit, include= TRUE}
+model_logit1 <- glm(NOTCOV ~ AGE_P + I(AGE_P^2) + female + Hispanic + Asian +  educ_hs + educ_smcoll + educ_as + educ_bach + educ_adv + married + divorc_sep + REGION, family = binomial, data = dat2)
+summary(model_logit1)
+require(lmtest)
+coeftest(model_logit1)
+exp(model_logit1$coefficients)
+plot(coef(model_logit1))
+```
+
+### Results:
+14 out of the 15 variables have a p-value lower than alpha (0.05); therefore the variables are significant, except the variable "divorc_sep" that do not contain enough information to reject the null hypothesis. 
+Reflecting on the NOTCOV as a dummy with 1 "as yes" and 0 "as no", we assume that coefficients with a negative sign have insurance coverage and the ones with a positive sign do not have it.  
+
+### 3.Setting the explanatory variables for the Random Forest, Support Vector Machines and Elastic net methods: 
+
+For the simple linear regression (glm function) it is not necessary to set the variables in a data frame. Although for the new models we are using it will be necessary.
+Below is the data frame with the list of variables set to have the same number of rows with unique row names in the class "data.frame".  Because it includes a matrix it will force the columns names to have unique results.
+```{r}
+d_region <- data.frame(model.matrix(~ dat2$REGION))
+d_region_born <- data.frame(model.matrix(~ factor(dat2$region_born)))  # snips any with zero in the subgroup
+dat_for_analysis_sub <- data.frame(
+  dat2$NOTCOV,
+  dat2$AGE_P,
+  dat2$female,
+  dat2$AfAm,
+  dat2$Asian,
+  dat2$RaceOther,
+  dat2$Hispanic,
+  dat2$educ_hs,
+  dat2$educ_smcoll,
+  dat2$educ_as,
+  dat2$educ_bach,
+  dat2$educ_adv,
+  dat2$married,
+  dat2$widowed,
+  dat2$divorc_sep,
+  d_region[,2:4],
+  d_region_born[,2:12]) # need [] since model.matrix includes intercept term
+
+names(dat_for_analysis_sub) <- c("NOTCOV",
+                                 "Age",
+                                 "female",
+                                 "AfAm",
+                                 "Asian",
+                                 "RaceOther",
+                                 "Hispanic",
+                                 "educ_hs",
+                                 "educ_smcoll",
+                                 "educ_as",
+                                 "educ_bach",
+                                 "educ_adv",
+                                 "married",
+                                 "widowed",
+                                 "divorc_sep",
+                                 "Region.Midwest",
+                                 "Region.South",
+                                 "Region.West",
+                                 "born.Mex.CentAm.Carib",
+                                 "born.S.Am",
+                                 "born.Eur",
+                                 "born.f.USSR",
+                                 "born.Africa",
+                                 "born.MidE",
+                                 "born.India.subc",
+                                 "born.Asia",
+                                 "born.SE.Asia",
+                                 "born.elsewhere",
+                                 "born.unknown")
+```
+
+
+### 4.Create a common data object that is standardized: 
+The goal here is to keep the regression parameters in a similar scale, and ensure that the intercept represents the corrected mean, this way the output of the regression will be easier to interpret.Following, we split into training and test sets.
+```{r Standardize for Sobj, include=FALSE}
+require("standardize")
+set.seed(654321)
+NN <- length(dat_for_analysis_sub$NOTCOV)
+# restrict_1 <- as.logical(round(runif(NN,min=0,max=0.6))) # use fraction as training data
+restrict_1 <- (runif(NN) < 0.1) # use 10% as training data
+dat_train <- subset(dat_for_analysis_sub, restrict_1)
+dat_test <- subset(dat_for_analysis_sub, !restrict_1)
+sobj <- standardize(NOTCOV ~ Age + female + AfAm + Asian + RaceOther + Hispanic + 
+                      educ_hs + educ_smcoll + educ_as + educ_bach + educ_adv + 
+                      married + widowed + divorc_sep + 
+                      Region.Midwest + Region.South + Region.West + 
+                      born.Mex.CentAm.Carib + born.S.Am + born.Eur + born.f.USSR + 
+                      born.Africa + born.MidE + born.India.subc + born.Asia + 
+                      born.SE.Asia + born.elsewhere + born.unknown, dat_train, family = binomial)
+
+s_dat_test <- predict(sobj, dat_test)
+```
+
+From the summary(restrict_1) is observed 7348 people in the training set against 66532 in the test set.  
+```{r}
+summary(restrict_1)
+```
+
+From the summary(sobj$data), it is possible to see the age with a mean zero, for the other variables how many are inside the true or false groups, for NOTCOV there is a mean of 0.1526 and max of 1.0000.
+```{r}
+summary(sobj$data)
+```
+
+### 5. Different models after normalizing the variables
+
+#### a)Linear regression: 
+The goal with this model is to understand how to call the standardized objects from above and interpret the results with the “traditional model” of linear regression. The lm function.
+```{r linear model, include= FALSE}
+# LPM
+model_lpm1 <- lm(sobj$formula, data = sobj$data)
+summary(model_lpm1)
+pred_vals_lpm <- predict(model_lpm1, s_dat_test)
+pred_model_lpm1 <- (pred_vals_lpm > 0.5)
+```
+
+```{r table, include= TRUE }
+table(pred = pred_model_lpm1, true = dat_test$NOTCOV)
+coeftest(model_lpm1)
+exp(model_lpm1$coefficients)
+plot(coef(model_lpm1))
+```
+
+### Results:
+ 
+The LM model classified a total of 66532 predictions, out of those 1250 were predicted as the ones that do not have health insurance, and 65282 as the ones who have it.
+In reality, the sample have 56248 with health insurance and 10284 without health insurance. 
+
+Accuracy: To find the accuracy we take the true positive (808) + true negative (55806) and divide by the total (66532) which gives us 0.85 or 85% of the times the classifier is correct.
+
+Mis-classification rate: to find how often the model is wrong, we take the false positive (442) + false negative (9476) and divide by the total (66532) which give us 0.149 or 15% is our “error rate”.
+
+False Positives Rate: When it is actually “no coverage”, how often does it predict “yes coverage”. Here we calculate False positive (442) divided by the actual not covered (56248) which is 0.007858057 or 0.7% 
+
+False Negatives: When it is actually “no coverage”, how often does it predict “yes covered”. Here we calculate False negative (9476) divided by the false negative (9476) plus the true positive (808) which is 0.921 or 92%
+
+#### b) Logit model: 
+The goal with this model is to understand the differences between the linear model above and the logit model when we call standardized objects.
+```{r logit1, include= FALSE}
+# logit 
+model_logit1 <- glm(sobj$formula, family = binomial, data = sobj$data)
+summary(model_logit1)
+pred_vals <- predict(model_logit1, s_dat_test, type = "response")
+pred_model_logit1 <- (pred_vals > 0.5)
+```
+
+
+```{r logitable, include= TRUE}
+table(pred = pred_model_logit1, true = dat_test$NOTCOV)
+coeftest(model_logit1)
+exp(model_logit1$coefficients)
+plot(coef(model_logit1))
+```
+
+### Results:
+
+The logit model classified a total of 66532 predictions, out of those 2776 were predicted as the ones that do not have health insurance, and 63756 as the ones who have it.
+In reality, the sample have 56248 with health insurance and 10284 without health insurance. 
+
+Accuracy: To find the accuracy we take the true positive (1646) + true negative (55118) and divide by the total (66532) which gives us 0.85 or 85% of the times the classifier is correct.
+
+Mis-classification rate: to find how often the model is wrong, we take the false positive (1130) + false negative (8638) and divide by the total (66532) which give us 0.146 or 15% is our “error rate”.
+
+False Positives Rate: When it is actually “no coverage”, how often does it predict “yes coverage”. Here we calculate False positive (1130) divided by the actual not covered (10284) which is 0.109 or 10.9% 
+
+False Negatives: When it is actually “no coverage”, how often does it predict “yes covered”. Here we calculate False negative (8638) divided by the false negative (8638) plus the true positive (1646) which is 0.839 or 84%
+
+### Comparing LPM and Logit:
+When comparing both models, the differences were on the numbers inside the table for each class although when calculating there are small differences between false positive and false negative. Apparently, the model logit have a lower false negative rate, which implies it might be a better way to classify the data than the LPM model. 
+Another interesting point is that the  error rate for both models is the same, leaving us with the only option to evaluate the trade off between false negative and false positive when deciding which model will make our classification better. 
+
+#### c) Random Forest model:
+We will use the random forest to improve the classification accuracy. 
+```{r forest, include= TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+require('randomForest')
+set.seed(54321)
+model_randFor <- randomForest(as.factor(NOTCOV) ~ ., data = sobj$data, importance=TRUE, proximity=TRUE)
+print(model_randFor)
+round(importance(model_randFor),2)
+varImpPlot(model_randFor)
+# look at confusion matrix for this too
+pred_model1 <- predict(model_randFor,  s_dat_test)
+table(pred = pred_model1, true = dat_test$NOTCOV)
+```
+
+### Results: 
+
+The random forest gives the confusion matrix which compare the ones that are truly 0/1 versus what is predicted for our binary classifier.
+
+In our model there are two possible predicted classes: “1 –  do not have health insurance” or “0 – have health insurance”. 
+The random forest classified a total of 7348 predictions, out of those 1121 were predicted as the ones that does not have health insurance, and 6227 as the ones who have it.
+In reality, the sample have 7138 with health insurance and 210 without health insurance. 
+
+Accuracy: To find the accuracy we take the true positive (136) + true negative (6153) and divide by the total (7348) which gives us 0.85 or 85% of the times the classifier is correct.
+
+Mis-classification rate: to find how often the model is wrong, we take the false positive (985) + false negative (74) and divide by the total (7348) which give us 0.1441 or 0.1441% is our “error rate” as shown on the R output.
+
+False Positives Rate: When it is actually “no coverage”, how often does it predict “yes coverage”. Here we calculate False positive (985) divided by the actual not covered (7138) which is 0.137 or 13.7% 
+
+False Negatives: When it is actually “no coverage”, how often does it predict “yes covered”. Here we calculate False negative (74) divided by the false negative (74) plus the true positive (136) which is 0.352 or 35%
+
+
+#### 6. Comparing Random Forest and Logit models: 
+
+Recall from the previous logit model we have:
+
+A total of 66532 predictions, which is more than the random forest, given that the random forest we cut the size to 7348 classifications. 
+
+Accuracy: For the accuracy both models returned 85%, although as the size of the sample in the logit model is bigger than the random forest model, it was expected to have greater accuracy.
+
+Mis-classification rate: the error rate for the random forest is lower than the logit error by approximately 1%, another important information in favor or the random forest model.   
+
+### Conclusion: 
+For the classification of people with or without health insurance the model logit is a worse fit overall, because even though it had more observations it mis-classified 15% of the times, more than the random forest which had less observations. 
+
+#### c) Support Vector Machines:
+This method is also used when Y is a binary variable. 
+```{r svm, include= TRUE}
+require(e1071)
+# tuned_parameters <- tune.svm(as.factor(NOTCOV) ~ ., data = sobj$data, gamma = 10^(-3:0), cost = 10^(-2:1)) 
+# summary(tuned_parameters)
+# figure best parameters and input into next
+svm.model <- svm(as.factor(NOTCOV) ~ ., data = sobj$data, cost = 10, gamma = 0.1)
+svm.pred <- predict(svm.model, s_dat_test)
+table(pred = svm.pred, true = dat_test$NOTCOV)
+```
+### Results: 
+The support vector machines classified a total of 66532 predictions same as the logit model, out of those 4020 were predicted as the ones that have health insurance, and 62512 as the ones who do not have it.
+In reality, the sample have 10284 without health insurance and 56248 with health insurance. 
+
+Accuracy: To find the accuracy we take the true positive (1976) + true negative (54204) and divide by the total (66532) which gives us 0.844 or 84.4% of the times the classifier is correct, less than the previous models.
+
+Mis-classification rate: to find how often the model is wrong, we take the false positive (2044) + false negative (8308) and divide by the total (66532) which give us  0.155 or 15.5% is our “error rate”. 
+
+False Positives Rate: When it is actually “no coverage”, how often does it predict “yes coverage”. Here we calculate False positive (2044) divided by the actual not covered (10284) which is 0.1987 or 19.8% 
+
+False Negatives: When it is actually “no coverage”, how often does it predict “yes covered”. Here we calculate False negative (8308) divided by the false negative (8308) plus the true positive (1976) which is 0.807 or 81%
+
+
+##### Conclusion: 
+The SVM model was less accurate than the previous models, although it had a similar error rate as LPM and Logit. Another, negative outcome is that the false positive was greater than all of the other models, in this situation is not a life threatening result, but in another study, it could have bad implications. 
+
+
+#### c) Elastic Net model:
+Here we have the combination of the Lasso and Ridge Regression. Although as the alpha parameter = 1, we will have a lasso. Now we will observe which variables are "important" in our prediction.  
+```{r elastic, include= TRUE}
+# Elastic Net
+require(glmnet)
+model1_elasticnet <-  glmnet(as.matrix(sobj$data[,-1]),sobj$data$NOTCOV) 
+# default is alpha = 1, lasso
+
+par(mar=c(4.5,4.5,1,4))
+plot(model1_elasticnet)
+vnat=coef(model1_elasticnet)
+vnat=vnat[-1,ncol(vnat)] # remove the intercept, and get the coefficients at the end of the path
+axis(4, at=vnat,line=-.5,label=names(sobj$data[,-1]),las=1,tick=FALSE, cex.axis=0.5) 
+
+plot(model1_elasticnet, xvar = "lambda")
+plot(model1_elasticnet, xvar = "dev", label = TRUE)
+print(model1_elasticnet)
+
+cvmodel1_elasticnet = cv.glmnet(data.matrix(sobj$data[,-1]),data.matrix(sobj$data$NOTCOV)) 
+cvmodel1_elasticnet$lambda.min
+log(cvmodel1_elasticnet$lambda.min)
+coef(cvmodel1_elasticnet, s = "lambda.min")
+
+pred1_elasnet <- predict(model1_elasticnet, newx = data.matrix(s_dat_test), s = cvmodel1_elasticnet$lambda.min)
+pred_model1_elasnet <- (pred1_elasnet < mean(pred1_elasnet)) 
+table(pred = pred_model1_elasnet, true = dat_test$NOTCOV)
+
+model2_elasticnet <-  glmnet(as.matrix(sobj$data[,-1]),sobj$data$NOTCOV, alpha = 0) 
+# or try different alpha values to see if you can improve
+```
+
+
+## Final Project Research: Analysis of Wage gap between African Americans and White workers.
+
+### Article 1: Performance Pay and the White-Black Wage Gap
+The paper is trying to answer if there is a difference in the payment by job performance between white and black Americans.The underlying reasons for that is highlighted as "discrimination, unmeasured ability, and selection". The research strongly believe that performance pay jobs are more related to white workers than the black workers. The work used data from Current Population Survey (CPS) for the years 1976–99, and observed variation in the raw log wage, regression in the log wage. 
+
+Heywood, John S., and Daniel Parent. “Performance Pay and the White-Black Wage Gap.” Journal of Labor Economics, vol. 30, no. 2, 2012, pp. 249–290. JSTOR, www.jstor.org/stable/10.1086/663355. Accessed 17 Nov. 2020.
+
+
+### Article 2: Decomposing Wage Residuals: Unmeasured Skill or Statistical Artifact?
+This article is criticizing the method of decomposing residual wage differentials among groups of workers. The main argument is that you cannot base your research in this kind of approach, because you looking only at residuals, making the research misleading. It also points to the importance of measuring the skills related to the wage gap. The paper provides alternative methods for calculating the wage gaps. It was an interesting analyze because it brings the importance of looking into other explanations for the same phenomena.    
+
+Suen, Wing. “Decomposing Wage Residuals: Unmeasured Skill or Statistical Artifact?” Journal of Labor Economics, vol. 15, no. 3, 1997, pp. 555–566. JSTOR, www.jstor.org/stable/10.1086/209872. Accessed 17 Nov. 2020.
+
+
