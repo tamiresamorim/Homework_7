@@ -1,6 +1,6 @@
 # Homework_7
 ================
-Tamires Amorim, Yamei Li, Meirou Guan and Carol-Ann Jackson
+Tamires Amorim
 11/14/2020
 
 ## Understanding different methods to classify data
@@ -892,36 +892,3 @@ table(pred = pred_model1_elasnet, true = dat_test$NOTCOV)
 model2_elasticnet <-  glmnet(as.matrix(sobj$data[,-1]),sobj$data$NOTCOV, alpha = 0) 
 # or try different alpha values to see if you can improve
 ```
-
-## Final Project Research: Analysis of Wage gap between African Americans and White workers.
-
-### Article 1: Performance Pay and the White-Black Wage Gap
-
-The paper is trying to answer if there is a difference in the payment by
-job performance between white and black Americans.The underlying reasons
-for that is highlighted as “discrimination, unmeasured ability, and
-selection”. The research strongly believe that performance pay jobs are
-more related to white workers than the black workers. The work used data
-from Current Population Survey (CPS) for the years 1976–99, and observed
-variation in the raw log wage, regression in the log wage.
-
-Heywood, John S., and Daniel Parent. “Performance Pay and the
-White-Black Wage Gap.” Journal of Labor Economics, vol. 30, no. 2, 2012,
-pp. 249–290. JSTOR, www.jstor.org/stable/10.1086/663355. Accessed 17
-Nov. 2020.
-
-### Article 2: Decomposing Wage Residuals: Unmeasured Skill or Statistical Artifact?
-
-This article is criticizing the method of decomposing residual wage
-differentials among groups of workers. The main argument is that you
-cannot base your research in this kind of approach, because you looking
-only at residuals, making the research misleading. It also points to the
-importance of measuring the skills related to the wage gap. The paper
-provides alternative methods for calculating the wage gaps. It was an
-interesting analyze because it brings the importance of looking into
-other explanations for the same phenomena.
-
-Suen, Wing. “Decomposing Wage Residuals: Unmeasured Skill or Statistical
-Artifact?” Journal of Labor Economics, vol. 15, no. 3, 1997,
-pp. 555–566. JSTOR, www.jstor.org/stable/10.1086/209872. Accessed 17
-Nov. 2020.
