@@ -1,9 +1,5 @@
-# Homework_7
-================
-Tamires Amorim
-11/14/2020
-
 ## Understanding different methods to classify data
+by Tamires Amorim
 
 The following project wants to understand what factors make an adult
 more likely to have health insurance. The analysis of the interactions
